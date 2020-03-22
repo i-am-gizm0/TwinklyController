@@ -1,5 +1,5 @@
 # TwinklyController
-
+![Build Test](https://github.com/i-am-gizm0/TwinklyController/workflows/Build%20Test/badge.svg?branch=master)
 
 ## Running
 Running `Main` will start one of the two modes. With no arguments, it will start the GUI. If you pass arguments, it will pass those to `CLI`.
