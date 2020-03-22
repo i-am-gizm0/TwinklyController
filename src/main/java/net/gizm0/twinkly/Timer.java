@@ -68,10 +68,8 @@ public class Timer {
      * @return
      */
     private int checkValue(int a) {
-        if (a < -1
-                || a
-                        >= 86400) { // -1 is treated as "disable" and 86400 is the number of seconds
-                                    // in a day
+        if (a < -1 || a >= 86400) { // -1 is treated as "disable" and 86400 is the number of seconds
+            // in a day
             return -1;
         }
         return a;
