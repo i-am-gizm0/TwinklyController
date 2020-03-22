@@ -1,3 +1,4 @@
+package net.gizm0.twinkly;
 import java.awt.BorderLayout;
 import java.awt.EventQueue;
 
@@ -20,12 +21,11 @@ import javax.swing.SwingConstants;
 import javax.swing.UIManager;
 import javax.swing.border.LineBorder;
 import java.awt.Color;
-import javax.swing.JTree;
-import java.awt.Component;
-import java.awt.Window.Type;
 
 public class GUI extends JFrame {
 
+	private static final long serialVersionUID = 7790683854583707561L;
+	
 	private JPanel contentPane;
 	private JTextField ipField;
 
@@ -33,6 +33,7 @@ public class GUI extends JFrame {
 	
 	/**
 	 * Launch the application.
+	 * @param args the command line arguments. shouldn't be anything
 	 */
 	public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
@@ -209,11 +210,6 @@ public class GUI extends JFrame {
 		JPanel panel_2 = new JPanel();
 		contentPane.add(panel_2, BorderLayout.CENTER);
 		panel_2.setLayout(new BorderLayout(0, 0));
-		
-		JTree tree = new JTree();
-		tree.setAlignmentY(Component.TOP_ALIGNMENT);
-		tree.setAlignmentX(Component.LEFT_ALIGNMENT);
-		panel_2.add(tree, BorderLayout.CENTER);
 //		tree.setModel(new DefaultTreeModel(
 //			new DefaultMutableTreeNode("Tree (192.168.1.185)") {
 //				{

@@ -1,5 +1,9 @@
+package net.gizm0.twinkly;
 import org.json.simple.JSONObject;
 
+/**
+ * A class to store the configuration values of Twinkly, populated by a call to {@link TwinklyController#gestalt()}
+ */
 public class Twinkly {
 	private String productName,
 		productVersion,
@@ -25,6 +29,10 @@ public class Twinkly {
 	
 	private JSONObject response;
 
+	/**
+	 * Parses the response from Twinkly into values
+	 * @param response a {@link JSONObject} of the data from the response
+	 */
 	public Twinkly(JSONObject response) {
 		productName = (String) response.get("product_name");
 		productVersion = (String) response.get("product_version");

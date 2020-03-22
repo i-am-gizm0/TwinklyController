@@ -1,3 +1,4 @@
+package net.gizm0.twinkly;
 import java.awt.Color;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
@@ -7,13 +8,17 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Calendar;
 
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+
+import net.gizm0.exception.ArgumentException;
+import net.gizm0.exception.MalformedResponseException;
+import net.gizm0.exception.NetworkException;
+import net.gizm0.exception.ServerRejectException;
 
 public class TwinklyController {
 	
@@ -32,7 +37,15 @@ public class TwinklyController {
 
 	private RandomString challenge = new RandomString(32);
 	
-	public TwinklyController(String IP) throws Exception {
+	/**
+	 * Creates a new controller and verifies the connection
+	 * @param IP The network address of the device
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 */
+	public TwinklyController(String IP) throws IOException, NetworkException, MalformedResponseException, ParseException {
 		this.IP = IP;
 		loginURL = new URL("http://" + IP + "/xled/v1/login");
 		verifyURL = new URL("http://" + IP + "/xled/v1/verify");
@@ -40,6 +53,12 @@ public class TwinklyController {
 		gestalt();
 	}
 
+	/**
+	 * Sets up most connections: sets the request method and the auth token and allows us to read the connection
+	 * @param url the URL for the connection
+	 * @param requestMethod a string of the request method ("GET" or "POST")
+	 * @throws IOException if a generic I/O error occurs if the method is invalid, probably
+	 */
 	private void setupConnection(URL url, String requestMethod) throws IOException {
 		connection = (HttpURLConnection) url.openConnection();
 		connection.setRequestMethod(requestMethod);
@@ -47,6 +66,13 @@ public class TwinklyController {
 		connection.setDoOutput(true);
 	}
 
+	/**
+	 * Returns the string of the server's response
+	 * @param con the connection to read from
+	 * @return the server's response
+	 * @throws UnsupportedEncodingException if Java can't read the text encoding. This probably won't happen
+	 * @throws IOException if a generic I/O error occurs If the input stream is inaccessible
+	 */
 	private String readFromConnection(HttpURLConnection con) throws UnsupportedEncodingException, IOException {
 		StringBuilder sb = new StringBuilder();
 		BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream(), "utf-8"));
@@ -58,14 +84,21 @@ public class TwinklyController {
 		return sb.toString();
 	}
 	
-	private void login() throws Exception {
+	/**
+	 * Initiate the authentication process
+	 * @throws IOException if a generic I/O error occurs 
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json if the server's response is malformed json
+	 */
+	private void login() throws IOException, NetworkException, MalformedResponseException, ParseException {
 		// Create request and send it
 		HttpURLConnection con = (HttpURLConnection) loginURL.openConnection();
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 		
 		OutputStreamWriter wr = new OutputStreamWriter(con.getOutputStream());
-		String requestBody = "{\"challenge\": \"" + challenge.nextString() + "\"}";
+		String requestBody = "{\"challenge\": \"" + challenge.nextString() + "\"}"; // I could have created `JSONObject`s but this is easier
 		wr.write(requestBody);
 		wr.flush();
 		
@@ -81,7 +114,7 @@ public class TwinklyController {
 			// It parsed successfully! Time to get the token
 			if ((authToken = (String) parsedJSON.get("authentication_token")) == null) {
 				// The response didn't contain an authentication token! Time to die!
-				throw new Exception(
+				throw new MalformedResponseException(
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
@@ -90,7 +123,7 @@ public class TwinklyController {
 			
 			if ((challengeResponse = (String) parsedJSON.get("challenge-response")) == null) {
 				// The response didn't contain a challenge response! Time to die!
-				throw new Exception(
+				throw new MalformedResponseException(
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
@@ -99,11 +132,20 @@ public class TwinklyController {
 			
 			// We got both an auth token and a challenge response! We're (almost) in! We have to verify first:
 			verify();
+		} else {
+			throw new NetworkException("0" + result + " BadHTTP Response: " + readFromConnection(con));
 		}
 		// We're in! Hooray!
 	}
 
-	private void verify() throws Exception {
+	/**
+	 * Complete the authentication process
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 * @throws NetworkException if a generic network error occurs
+	 */
+	private void verify() throws IOException, MalformedResponseException, ParseException, NetworkException {
 		
 		setupConnection(verifyURL, "POST");
 		
@@ -122,17 +164,27 @@ public class TwinklyController {
 			// We have the response! Time to parse it
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			if (parsedJSON.get("code") == null || (long) parsedJSON.get("code") != 1000) {
-				throw new Exception(
+				throw new MalformedResponseException (
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
 						) + " FailVerif Response:" + response);
 			}
+		} else {
+			throw new NetworkException("0" + result + " BadHTTP Response: " + readFromConnection(connection));
 		}
 		// We're in! Hooray!
 	}
 	
-	public Twinkly gestalt() throws Exception {
+	/**
+	 * Get the status information from the device
+	 * @return a {@link Twinkly} object containing the returned values
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 */
+	public Twinkly gestalt() throws IOException, NetworkException, MalformedResponseException, ParseException {
 		login();
 		
 		mainURL = new URL("http://" + IP + "/xled/v1/gestalt");
@@ -146,14 +198,22 @@ public class TwinklyController {
 			try {
 				return new Twinkly((JSONObject) parser.parse(response));
 			} catch (ParseException e) {
-				throw new Exception("0" + Integer.toString(result) + " Bad_JSON Response: " + response);
+				throw new MalformedResponseException("0" + Integer.toString(result) + " Bad_JSON Response: " + response);
 			}
 		} else {
-			throw new Exception("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
+			throw new NetworkException("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
 		}
 	}
 
-	public String getName() throws Exception {
+	/**
+	 * Gets the name of the device
+	 * @return the name of the device
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 */
+	public String getName() throws IOException, NetworkException, MalformedResponseException, ParseException {
 		login();
 		
 		mainURL = new URL("http://" + IP + "/xled/v1/device_name");
@@ -167,14 +227,24 @@ public class TwinklyController {
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			return (String) parsedJSON.get((Object) "name");
 		} else {
-			throw new Exception("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
+			throw new NetworkException("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
 		}
 	}
 	
-	public void setName(String name) throws Exception {
+	/**
+	 * Set the name of the device
+	 * @param name The new name for the device. It must be less than 32 characters and not contain {@code '\b'}, {@code '\f'}, {@code '\n'}, {@code '\r'}, {@code '\t'}, {@code '\"'}, or {@code '\\'}
+	 * @throws ArgumentException if an argument is invalid
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 * @throws ServerRejectException if the server rejects the name
+	 */
+	public void setName(String name) throws ArgumentException, IOException, NetworkException, MalformedResponseException, ParseException, ServerRejectException {
 		// Make sure the new name can't possibly break JSON
 		if (name.length() >= 32) {
-			throw new Exception("0001 Lng_Name NmLength: " + name.length());
+			throw new ArgumentException("0001 Lng_Name NmLength: " + name.length());
 		}
 		for (int i = 0; i < name.length(); i++) {
 			switch (name.charAt(i)) {
@@ -185,7 +255,7 @@ public class TwinklyController {
 				case '\t':
 				case '\"':
 				case '\\':
-					throw new Exception("0001 Bad_Name Position: " + i);
+					throw new ArgumentException("0001 Bad_Name Position: " + i);
 			}
 		}
 		
@@ -208,7 +278,7 @@ public class TwinklyController {
 			// We have the response! Time to parse it
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			if (parsedJSON.get("code") == null || (long) parsedJSON.get("code") != 1000) {
-				throw new Exception(
+				throw new ServerRejectException(
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
@@ -225,7 +295,15 @@ public class TwinklyController {
 //		// TODO: Implement Station mode
 //	}
 	
-	public Timer getTimer() throws Exception {
+	/**
+	 * Gets the timer setting from the device
+	 * @return a {@link Timer} object containing the timer data
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 */
+	public Timer getTimer() throws IOException, NetworkException, MalformedResponseException, ParseException {
 		login();
 		
 		mainURL = new URL("http://" + IP + "/xled/v1/timer");
@@ -239,15 +317,34 @@ public class TwinklyController {
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			return new Timer(((Long)parsedJSON.get("time_now")).intValue(), ((Long)parsedJSON.get("time_on")).intValue(), ((Long)parsedJSON.get("time_off")).intValue());
 		} else {
-			throw new Exception("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
+			throw new NetworkException("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
 		}
 	}
 
-	public void setTimer(Timer timer) throws Exception {
+	/**
+	 * Set the timer, overriding the current time for the correct time
+	 * @param timer the timer to send
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 * @throws ServerRejectException if the server rejects the timer
+	 */
+	public void setTimer(Timer timer) throws IOException, NetworkException, MalformedResponseException, ParseException, ServerRejectException {
 		setTimer(timer, true);
 	}
 
-	public void setTimer(Timer timer, boolean useStrict) throws Exception {
+	/**
+	 * Set the timer
+	 * @param timer the timer data
+	 * @param useStrict true to override the current time with the real time
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 * @throws ServerRejectException if the server rejects the timer
+	 */
+	public void setTimer(Timer timer, boolean useStrict) throws IOException, NetworkException, MalformedResponseException, ParseException, ServerRejectException {
 		int now, on, off;
 		now = timer.getNow();
 		on = timer.getOn();
@@ -281,7 +378,7 @@ public class TwinklyController {
 			// We have the response! Time to parse it
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			if (parsedJSON.get("code") == null || (long) parsedJSON.get("code") != 1000) {
-				throw new Exception(
+				throw new ServerRejectException(
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
@@ -293,10 +390,16 @@ public class TwinklyController {
 	/**
 	 * Sets mode of Twinkly
 	 * @param mode Mode to set (OFF, DEMO, MOVIE)
-	 * @throws Exception if anything goes wrong
+	 * @throws ServerRejectException if the server rejects the mode
+	 * @throws ParseException if the server's response is malformed json 
+	 * @throws MalformedResponseException if the server's response is malformed HTTP 
+	 * @throws NetworkException if a generic network error occurs 
+	 * @throws IOException if a generic I/O error occurs
 	 */
 	
-	public void setMode(Mode mode) throws Exception {
+	@SuppressWarnings("incomplete-switch")
+	public void setMode(Mode mode) throws IOException, NetworkException, MalformedResponseException, ParseException, ServerRejectException {
+		// TODO: rewrite implementation so this is the main method
 		int option = 0;
 		switch (mode) {
 			case DEMO:
@@ -316,9 +419,13 @@ public class TwinklyController {
 	 * 2: movie (last uploaded effect)
 	 * real time is not supported yet
 	 * an invalid choice will revert to off
-	 * @throws Exception 
+	 * @throws ParseException if the server's response is malformed json 
+	 * @throws MalformedResponseException if the server's response is malformed HTTP 
+	 * @throws NetworkException if a generic network error occurs 
+	 * @throws IOException if a generic I/O error occurs 
+	 * @throws ServerRejectException if the server rejects the mode
 	 */
-	public void setMode(int option) throws Exception {
+	public void setMode(int option) throws IOException, NetworkException, MalformedResponseException, ParseException, ServerRejectException {
 		if (option < 0 && option > 2) {
 			option = 0;
 		}
@@ -358,13 +465,13 @@ public class TwinklyController {
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			if (parsedJSON.get("code") == null || (long) parsedJSON.get("code") != 1000) {
 				if ((long)parsedJSON.get("code") == 1104 && option == 2) {
-					throw new Exception(
+					throw new ServerRejectException(
 							((Long) parsedJSON.get("code") != null ?
 									((Long) parsedJSON.get("code")).toString()
 								: "0000"
 							) + " BadMovie Response:" + response);
 				}
-				throw new Exception(
+				throw new ServerRejectException(
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
@@ -373,7 +480,15 @@ public class TwinklyController {
 		}
 	}
 
-	public String getFirmwareVersion() throws Exception {
+	/**
+	 * Retrieve the current firmware version from the device
+	 * @return
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 */
+	public String getFirmwareVersion() throws IOException, NetworkException, MalformedResponseException, ParseException {
 		login();
 		
 		mainURL = new URL("http://" + IP + "/xled/v1/fw/version");
@@ -387,11 +502,19 @@ public class TwinklyController {
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			return (String) parsedJSON.get((Object) "version");
 		} else {
-			throw new Exception("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
+			throw new NetworkException("0" + Integer.toString(result) + " Bad_HTTP Response: " + readFromConnection(connection));
 		}
 	}
 	
-	public void reset() throws Exception {
+	/**
+	 * Tell the device to reset I guess? The unofficial documentation isn't clear and I didn't test it
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 */
+	@Deprecated
+	public void reset() throws IOException, NetworkException, MalformedResponseException, ParseException {
 		login();
 		
 		mainURL = new URL("http://" + IP + "/xled/v1/led/reset");
@@ -399,7 +522,17 @@ public class TwinklyController {
 		connection.getResponseCode();
 	}
 	
-	public void uploadMovie(File image, int fps) throws Exception {
+	/**
+	 * Upload and run the effect in the image
+	 * @param image The image to display. Read the wiki for more information on the file format
+	 * @param fps The speed to run the animation at, in frames per second
+	 * @throws IOException if a generic I/O error occurs
+	 * @throws NetworkException if a generic network error occurs
+	 * @throws MalformedResponseException if the server's response is malformed HTTP
+	 * @throws ParseException if the server's response is malformed json
+	 * @throws ServerRejectException if the server rejects the movie
+	 */
+	public void uploadMovie(File image, int fps) throws IOException, NetworkException, MalformedResponseException, ParseException, ServerRejectException {
 		login();
 		Twinkly lights = gestalt();
 		int length = ((Long)lights.getNumberOfLED()).intValue();
@@ -442,7 +575,7 @@ public class TwinklyController {
 			// We have the response! Time to parse it
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			if (parsedJSON.get("code") == null || ((long) parsedJSON.get("code") != 1000 && (long) parsedJSON.get("code") != 1100)) {
-				throw new Exception(
+				throw new ServerRejectException(
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
@@ -472,7 +605,7 @@ public class TwinklyController {
 			// We have the response! Time to parse it
 			JSONObject parsedJSON = (JSONObject) parser.parse(response);
 			if (parsedJSON.get("code") == null || (long) parsedJSON.get("code") != 1000) {
-				throw new Exception(
+				throw new ServerRejectException(
 						((Long) parsedJSON.get("code") != null ?
 								((Long) parsedJSON.get("code")).toString()
 							: "0000"
@@ -512,14 +645,14 @@ public class TwinklyController {
 				// We have the response! Time to parse it
 				JSONObject parsedJSON = (JSONObject) parser.parse(response);
 				if (parsedJSON.get("code") == null || ((long) parsedJSON.get("code") != 1000 && (long) parsedJSON.get("code") != 1100)) {
-					throw new Exception(
+					throw new ServerRejectException(
 							((Long) parsedJSON.get("code") != null ?
 									((Long) parsedJSON.get("code")).toString()
 								: "0000"
 							) + " MdeReject Response:" + response);
 				}
 				if (parsedJSON.get("frames_number") == null || (int)parsedJSON.get("frames_number") != frames) {
-					throw new Exception(
+					throw new ServerRejectException(
 							((Long) parsedJSON.get("code") != null ?
 									((Long) parsedJSON.get("code")).toString()
 								: "0000"

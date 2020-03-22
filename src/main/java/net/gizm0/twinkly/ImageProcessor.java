@@ -1,9 +1,14 @@
+package net.gizm0.twinkly;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
+/**
+ * A class to process image files to be sent to Twinkly
+ */
 public class ImageProcessor {
 	private int width, height;
 	private BufferedImage image = null;
@@ -13,16 +18,16 @@ public class ImageProcessor {
 	 * 
 	 * @param input_file The image file to send to the string
 	 * @param stringLength the number of lights on the string
-	 * @param frames the number of frames in the animation
-	 * @throws Exception thrown if `stringLength` != image width
+	 * @param maxframes the number of frames in the animation to play
+	 * @throws IOException if a generic I/O error occurs
 	 */
-	public ImageProcessor(File input_file, int stringLength, int maxframes) throws Exception {
+	public ImageProcessor(File input_file, int stringLength, int maxframes) throws IOException {
 		this.input_file = input_file;
 		width = stringLength;
 //		image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 		image = ImageIO.read(input_file);
 		if (image.getWidth() != width) {
-			throw new Exception("Image is not the same width as string length");
+			throw new IOException("Image is not the same width as string length");
 		}
 		height = image.getHeight();		
 	}
