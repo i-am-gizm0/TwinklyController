@@ -1,2 +1,1 @@
-# jTwinkly
- 
+# TwinklyController
