@@ -1,3 +1,6 @@
+# ⚠ This Repository Is Archived ⚠
+**I wrote this code a while ago as somewhat of a learning excercise in Java and I'm not proud of it. It's messy, it's clunky, and I have never wanted to go back and fix it. Therefore, I'm starting a new project, rewriting it in Typescript. It will make use of built-in APIs such as Streams for easier control**
+
 # TwinklyController
 ![Build Test](https://github.com/i-am-gizm0/TwinklyController/workflows/Build%20Test/badge.svg?branch=master)
 
